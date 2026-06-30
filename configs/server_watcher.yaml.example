@@ -1,0 +1,76 @@
+message:
+  max_chars: 3000
+
+providers:
+  qq:
+    enabled: true
+    target_type: c2c
+    target: null
+    app_id_env: QQBOT_APP_ID
+    client_secret_env: QQBOT_CLIENT_SECRET
+    app_id: null
+    client_secret: null
+    api_base: "https://api.sgroup.qq.com"
+    token_url: "https://bots.qq.com/app/getAppAccessToken"
+    timeout_seconds: 30
+
+plugins:
+  gpustat:
+    enabled: true
+    reply_mode: image
+    command_aliases:
+      - gpustat
+      - gpu
+      - /gpustat
+      - /gpu
+    timeout_seconds: 15
+    default_args:
+      - --no-color
+
+  top:
+    enabled: true
+    reply_mode: image
+    command_aliases:
+      - top
+      - /top
+    timeout_seconds: 15
+    width: 160
+    default_process_limit: 20
+    max_process_limit: 60
+
+  df:
+    enabled: true
+    reply_mode: image
+    command_aliases:
+      - df
+      - /df
+    timeout_seconds: 15
+    width: 160
+
+  du:
+    enabled: true
+    reply_mode: text
+    command_aliases:
+      - du
+      - /du
+    timeout_seconds: 20
+    default_path: .
+    default_depth: 1
+    max_depth: 3
+    default_entries: 20
+    max_entries: 40
+
+  codex:
+    enabled: true
+    binary: codex
+    workdir: /raid/lhk
+    session_prefix: qq-codex
+    poll_seconds: 1.5
+    capture_lines: 300
+    max_chunk_chars: 1800
+    startup_timeout_seconds: 20
+    command_timeout_seconds: 10
+    start_aliases:
+      - codex
+      - /codex
+    extra_args: []

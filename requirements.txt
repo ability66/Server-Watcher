@@ -1,0 +1,5 @@
+gpustat>=1.1.1
+Pillow>=10.0.0
+PyYAML>=6.0.2
+websocket-client>=1.8.0
+pytest>=8.0.0
