@@ -4,6 +4,7 @@
 
 当前版本先支持一个可扩展命令插件：
 
+- `a100` / `v100`: 多服务器部署时切换当前聊天要查看的服务器
 - `gpustat`: 查看当前机器 GPU 状态
 - `top`: 查看当前 `top` 快照
 - `df`: 查看磁盘挂载使用情况
@@ -49,6 +50,25 @@ export QQBOT_APP_ID=你的_app_id
 export QQBOT_CLIENT_SECRET=你的_client_secret
 ```
 
+如果同一个 QQ bot 同时跑在多台服务器上，可以启用服务器切换：
+
+```yaml
+servers:
+  enabled: true
+  current: a100
+  default: a100
+  targets:
+    a100:
+      label: A100
+      aliases: [a100]
+    v100:
+      label: V100
+      aliases: [v100]
+```
+
+每台服务器都配置同一份 `targets`，但把 `servers.current` 改成当前机器对应的名字。
+发送 `a100` 或 `v100` 会切换当前聊天的响应服务器；未选中的服务器会静默忽略后续命令。
+
 ## 启动
 
 ```bash
@@ -58,6 +78,8 @@ export QQBOT_CLIENT_SECRET=你的_client_secret
 ## 支持命令
 
 - `help`
+- `a100`
+- `v100`
 - `gpustat`
 - `gpustat text`
 - `gpustat full`

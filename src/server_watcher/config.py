@@ -39,9 +39,26 @@ class PluginConfig:
 
 
 @dataclass(frozen=True)
+class ServerTargetConfig:
+    name: str
+    label: str
+    aliases: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ServerSwitchConfig:
+    enabled: bool = False
+    current: str = "local"
+    default: str | None = None
+    targets: tuple[ServerTargetConfig, ...] = ()
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class AppConfig:
     qq: QQBotConfig
     plugins: dict[str, PluginConfig]
+    server_switch: ServerSwitchConfig = field(default_factory=ServerSwitchConfig)
     max_message_chars: int = DEFAULT_MAX_MESSAGE_CHARS
     source_path: Path | None = None
 
@@ -88,6 +105,7 @@ def load_config(path: Path) -> AppConfig:
     return AppConfig(
         qq=qq,
         plugins=plugins,
+        server_switch=load_server_switch_config(data.get("servers") or data.get("server_switch") or {}),
         max_message_chars=max_message_chars,
         source_path=path,
     )
@@ -97,8 +115,42 @@ def default_config(*, source_path: Path | None = None) -> AppConfig:
     return AppConfig(
         qq=QQBotConfig(enabled=True),
         plugins={"gpustat": PluginConfig(enabled=True, raw={})},
+        server_switch=ServerSwitchConfig(enabled=False),
         max_message_chars=DEFAULT_MAX_MESSAGE_CHARS,
         source_path=source_path,
+    )
+
+
+def load_server_switch_config(raw_value: object) -> ServerSwitchConfig:
+    if not isinstance(raw_value, dict):
+        return ServerSwitchConfig(enabled=False)
+
+    raw = dict(raw_value)
+    enabled = bool(raw.get("enabled", False))
+    current = _normalize_server_key(raw.get("current") or raw.get("current_server") or "local")
+    default = _optional_server_key(raw.get("default") or raw.get("default_active"))
+    targets = _normalize_server_targets(raw.get("items") or raw.get("targets") or raw.get("choices") or raw.get("servers"))
+
+    if current not in {target.name for target in targets}:
+        targets = (
+            *targets,
+            ServerTargetConfig(
+                name=current,
+                label=str(raw.get("label") or current).strip() or current,
+                aliases=(current,),
+            ),
+        )
+
+    _validate_server_targets(targets)
+    target_names = {target.name for target in targets}
+    if default is not None and default not in target_names:
+        raise ConfigError(f"servers.default 指向了未配置的服务器：{default}")
+    return ServerSwitchConfig(
+        enabled=enabled,
+        current=current,
+        default=default,
+        targets=targets,
+        raw=raw,
     )
 
 
@@ -134,3 +186,69 @@ def _optional_string(value: object) -> str | None:
     text = str(value or "").strip()
     return text or None
 
+
+def _optional_server_key(value: object) -> str | None:
+    text = _normalize_server_key(value)
+    return text or None
+
+
+def _normalize_server_key(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def _normalize_server_targets(raw_targets: object) -> tuple[ServerTargetConfig, ...]:
+    if isinstance(raw_targets, dict):
+        return tuple(
+            _normalize_server_target(name=key, raw_target=value)
+            for key, value in raw_targets.items()
+            if str(key or "").strip()
+        )
+
+    if isinstance(raw_targets, list):
+        targets: list[ServerTargetConfig] = []
+        for index, raw_target in enumerate(raw_targets):
+            if isinstance(raw_target, dict):
+                target = _normalize_server_target(name=raw_target.get("name") or f"server-{index + 1}", raw_target=raw_target)
+            else:
+                target = _normalize_server_target(name=raw_target, raw_target={})
+            if target.name:
+                targets.append(target)
+        return tuple(targets)
+
+    return ()
+
+
+def _normalize_server_target(*, name: object, raw_target: object) -> ServerTargetConfig:
+    raw = dict(raw_target or {}) if isinstance(raw_target, dict) else {}
+    normalized_name = _normalize_server_key(raw.get("name") or name)
+    label = str(raw.get("label") or raw.get("display_name") or normalized_name).strip() or normalized_name
+    aliases = _normalize_server_aliases(raw.get("aliases"), default=normalized_name)
+    return ServerTargetConfig(name=normalized_name, label=label, aliases=aliases)
+
+
+def _normalize_server_aliases(raw_aliases: object, *, default: str) -> tuple[str, ...]:
+    aliases: list[str] = []
+    if isinstance(raw_aliases, list):
+        aliases = [_normalize_server_key(alias) for alias in raw_aliases if _normalize_server_key(alias)]
+    elif isinstance(raw_aliases, str) and raw_aliases.strip():
+        aliases = [_normalize_server_key(raw_aliases)]
+
+    if default and default not in aliases:
+        aliases.insert(0, default)
+    return tuple(dict.fromkeys(aliases))
+
+
+def _validate_server_targets(targets: tuple[ServerTargetConfig, ...]) -> None:
+    names: set[str] = set()
+    aliases: dict[str, str] = {}
+    for target in targets:
+        if not target.name:
+            raise ConfigError("servers.targets 里存在空的服务器名称。")
+        if target.name in names:
+            raise ConfigError(f"servers.targets 里服务器名称重复：{target.name}")
+        names.add(target.name)
+        for alias in target.aliases:
+            owner = aliases.get(alias)
+            if owner is not None and owner != target.name:
+                raise ConfigError(f"服务器快捷指令重复：{alias} 同时属于 {owner} 和 {target.name}")
+            aliases[alias] = target.name

@@ -17,6 +17,7 @@ from .config import AppConfig, ConfigError, load_config, resolve_secret, validat
 from .plugins import build_plugins
 from .plugins.base import ImageReply, TextReply
 from .qqbot_client import QQBotClient, QQBotClientError
+from .server_selection import ServerSelector
 
 
 GROUP_AND_C2C_EVENT_INTENT = 1 << 25
@@ -61,8 +62,10 @@ def main() -> int:
         print(f"Invalid config: {exc}", file=sys.stderr)
         return 2
 
+    server_selector = ServerSelector(config.server_switch)
     router = CommandRouter(
         build_plugins(plugin_configs=config.plugins, max_message_chars=config.max_message_chars),
+        extra_help_lines=server_selector.help_lines(),
     )
     codex_bridge: CodexBridgeManager | None = None
     retry_seconds = max(1, int(args.retry_seconds))
@@ -104,6 +107,7 @@ def main() -> int:
                 client_secret=client_secret,
                 config=config,
                 router=router,
+                server_selector=server_selector,
                 codex_bridge=codex_bridge,
             )
         except KeyboardInterrupt:
@@ -154,6 +158,7 @@ def run_gateway_session(
     client_secret: str,
     config: AppConfig,
     router: CommandRouter,
+    server_selector: ServerSelector,
     codex_bridge: CodexBridgeManager,
 ) -> None:
     latest_seq: dict[str, int | None] = {"value": None}
@@ -208,7 +213,17 @@ def run_gateway_session(
             if message is None or not is_authorized_message(message, config):
                 continue
 
-            if router.is_help_command(message.content):
+            switch_decision = server_selector.handle_switch_command(
+                reply_target=message.reply_target,
+                raw_text=message.content,
+            )
+            if switch_decision.handled:
+                if switch_decision.reply is None:
+                    continue
+                reply = switch_decision.reply
+            elif not server_selector.should_process(reply_target=message.reply_target):
+                continue
+            elif router.is_help_command(message.content):
                 reply = router.dispatch(message.content)
             else:
                 bridge_reply = codex_bridge.handle_message(

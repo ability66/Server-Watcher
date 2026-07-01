@@ -15,9 +15,11 @@ class CommandRouter:
         plugins: Iterable[CommandPlugin],
         *,
         help_aliases: tuple[str, ...] = ("help", "/help", "帮助"),
+        extra_help_lines: Iterable[str] = (),
     ) -> None:
         self.plugins = list(plugins)
         self.help_aliases = tuple(alias.lower() for alias in help_aliases)
+        self.extra_help_lines = list(extra_help_lines)
 
     def is_help_command(self, raw_text: str) -> bool:
         text = normalize_message_text(raw_text)
@@ -49,6 +51,7 @@ class CommandRouter:
         for plugin in self.plugins:
             examples = " / ".join(plugin.spec.examples) if plugin.spec.examples else ", ".join(plugin.spec.aliases)
             lines.append(f"- {examples}: {plugin.spec.summary}")
+        lines.extend(self.extra_help_lines)
         lines.extend(
             [
                 "",

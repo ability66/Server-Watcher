@@ -1,6 +1,20 @@
 message:
   max_chars: 3000
 
+servers:
+  enabled: false
+  current: a100
+  default: a100
+  targets:
+    a100:
+      label: A100
+      aliases:
+        - a100
+    v100:
+      label: V100
+      aliases:
+        - v100
+
 providers:
   qq:
     enabled: true
